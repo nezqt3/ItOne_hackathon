@@ -1,6 +1,6 @@
 import redis
 from dotenv import load_dotenv
-from connect_tgbot import Bot
+from notifications.connect_tgbot import Bot
 import os
 import time
 import json
@@ -42,7 +42,6 @@ class Redis(object):
                 time.sleep(2)
                     
     def send_alert(self, id, details, severity):
-        """Публикует новое уведомление в Redis Stream."""
         message = {
             "id": str(id),
             "details": details,
@@ -50,9 +49,3 @@ class Redis(object):
         }
         self.redis.xadd("alerts_stream", message)
         print(f"📤 Отправлено в Redis Stream: {message}")
-
-notificator = Redis()
-                   
-notificator.send_alert(123, "Попытка фальсификации данных", 0.91)
-
-notificator.listener()
