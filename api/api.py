@@ -3,10 +3,18 @@ import json
 import csv
 import tempfile
 import os
+import sys
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs
+import threading
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from notifications.notification import Redis
 
 transactions = []
+redis = Redis()
+
 class SimpleAPIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed_path = urlparse(self.path)
@@ -38,6 +46,8 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
                 # Обработка импорта JSON файла
                 added_count = self._import_json_data(data)
                 self._send_json_response(200, {"message": f"Imported {added_count} transactions"})
+            elif self.path == '/notifications/create':
+                self._send_notification(data)
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -99,8 +109,16 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
         with open(temp_path, 'rb') as f:
             self.wfile.write(f.read())
         os.unlink(temp_path)
+        
+    def _send_notification(self, data):
+        try:
+            redis.send_alert(data['id'], data['details'], data['severity'])
+            self._send_json_response(200, {"message": "Notification added", "data": data})
+        except Exception as e:
+            self._send_json_response(400, {"error": str(e)})
 
 if __name__ == '__main__':
     server = HTTPServer(('localhost', 8000), SimpleAPIHandler)
+    threading.Thread(target=redis.listener, daemon=True).start()
     print("Server running on http://localhost:8000")
     server.serve_forever()
