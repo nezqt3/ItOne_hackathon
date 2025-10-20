@@ -557,18 +557,6 @@ def shutdown(signum, frame):
     sys.exit(0)
 
 if __name__ == '__main__':
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
-    server = HTTPServer(('0.0.0.0', 3000), FraudDetectionAPIHandler)
-    listener_thread = threading.Thread(target=redis.listener, daemon=True, name="RedisListener")
-    listener_thread.start()
-    print("Fraud Detection API Server running on http://0.0.0.0:3000")
-    print(f"Worker threads: {WORKER_COUNT}, Max queue size: {MAX_QUEUE_SIZE}")
-    print("Supported transaction fields:")
-    print("Required: transaction_id, timestamp, sender_account, receiver_account, amount, transaction_type")
-    print("Optional: merchant_category, location, device_used, is_fraud, fraud_type, time_since_last_transaction, spending_deviation_score, velocity_score, geo_anomaly_score, payment_channel, ip_address, device_hash")
-    logger.info("Server started successfully", extra={'component': 'server', 'correlation_id': 'system'})
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        shutdown(None, None)
+    server = HTTPServer(('localhost', 8000), SimpleAPIHandler)
+    print("Server running on http://localhost:8000")
+    server.serve_forever()
