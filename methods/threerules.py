@@ -19,10 +19,9 @@ def pattern_rule(receiver, money, pat_oper, pat_quant, window,time_t, oper_quant
     else: return False
     
 def composite_rule(bulev,amount,time):
-    bulev = bulev.replace(" ","").replace("amount",str(amount)).replace("AND","&").replace("OR","|")
+    bulev = bulev.replace(" ","").replace("amount",str(amount)).replace("AND","and").replace("OR","or").replace("NOT","not")
     if "00:00:00"<=time.split()[1]<="06:00:00": bulev = bulev.replace("nighttime","True").replace("daytime","False")
     else: bulev = bulev.replace("nighttime","False").replace("daytime","True")
-    bulev = bulev.replace("NOT(True)","False").replace("NOT(False)","True").replace("NOTTrue","False").replace("NOTFalse","True")
     return eval(bulev)
 
 operations = [">=",">","<=","<","==","!="] # в панели ≥, >, ≤, <, =, !=
