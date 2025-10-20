@@ -3,6 +3,8 @@ import json
 import csv
 import tempfile
 import os
+from queue import Queue
+import re
 import sys
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs
@@ -13,7 +15,73 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from notifications.notification import Redis
 
 transactions = []
+processing_queue = Queue()
+VALID_TRANSACTION_TYPES = {"payment", "refund", "transfer"}
+ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{6,64}$")  # допустимый формат идентификатора
 redis = Redis()
+
+WORKER_COUNT = 2
+
+def process_transactions():
+    while True:
+        tx = processing_queue.get()
+        try:
+            tx_id = tx['transaction_id']
+            print(f"[WORKER] Processing transaction {tx_id}, correlation_id={tx['correlation_id']}")
+            transactions[tx_id]['status'] = 'processed'
+        except Exception as e:
+            print(f"[WORKER] Failed to process: {e}")
+            tx['status'] = 'failed'
+        finally:
+            processing_queue.task_done()
+            
+for _ in range(WORKER_COUNT):
+    t = threading.Thread(target=process_transactions, daemon=True)
+    t.start()
+
+def validate_transaction(data):
+    errors = []
+
+    # Идемпотентность
+    tx_id = data.get('transaction_id')
+    if not tx_id or not ID_PATTERN.match(tx_id):
+        errors.append("transaction_id is missing or invalid")
+    elif tx_id in transactions:
+        errors.append(f"transaction_id '{tx_id}' already exists (idempotent)")
+
+    # Корреляционный ID
+    correlation_id = data.get('correlation_id')
+    if not correlation_id or not ID_PATTERN.match(correlation_id):
+        errors.append("correlation_id is missing or invalid")
+
+    # Сумма
+    amount = data.get('amount')
+    if not isinstance(amount, (int, float)) or amount <= 0:
+        errors.append("amount must be a positive number")
+
+    # Счета
+    sender = data.get('from')
+    receiver = data.get('to')
+    if not sender or not ID_PATTERN.match(sender):
+        errors.append("from is missing or invalid")
+    if not receiver or not ID_PATTERN.match(receiver):
+        errors.append("to is missing or invalid")
+
+    # Тип транзакции
+    tx_type = data.get('type')
+    if tx_type not in VALID_TRANSACTION_TYPES:
+        errors.append(f"type must be one of {VALID_TRANSACTION_TYPES}")
+
+    # Временная метка
+    timestamp = data.get('timestamp')
+    try:
+        ts = datetime.fromisoformat(timestamp)
+        if ts > datetime.now():
+            errors.append("timestamp cannot be in the future")
+    except Exception:
+        errors.append("timestamp is invalid")
+
+    return errors
 
 class SimpleAPIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -43,9 +111,9 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
                 transactions.append(data)
                 self._send_json_response(200, {"message": "Transaction added", "id": data['transaction_id']})
             elif self.path == '/transactions/import-json':
-                # Обработка импорта JSON файла
                 added_count = self._import_json_data(data)
                 self._send_json_response(200, {"message": f"Imported {added_count} transactions"})
+            
             elif self.path == '/notifications/create':
                 self._send_notification(data)
             else:
@@ -76,7 +144,7 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
                 transactions.append(json_data)
                 added_count += 1
         return added_count
-
+            
     def _export_to_csv(self):
         if not transactions:
             self.send_response(404)
