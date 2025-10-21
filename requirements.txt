@@ -9,6 +9,7 @@ dotenv==0.9.9
 fastapi==0.119.0
 h11==0.16.0
 idna==3.11
+psycopg[binary]>=3.1
 pydantic==2.12.3
 pydantic_core==2.41.4
 pyTelegramBotAPI==4.29.1
