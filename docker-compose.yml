@@ -4,7 +4,7 @@ services:
   web:
     build: .
     container_name: itone_django
-    command: python ItOne_hackathon/djangoAdmin/manage.py runserver 0.0.0.0:8000
+    command: python djangoAdmin/manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
     ports:
