@@ -20,7 +20,7 @@ services:
     environment:
       POSTGRES_DB: django_db
       POSTGRES_USER: django_user
-      POSTGRES_PASSWORD: password123
+      POSTGRES_PASSWORD: Lbjybc01
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -29,6 +29,16 @@ services:
     container_name: redis_cache
     ports:
       - "6379:6379"
+
+  bot:
+    build: .
+    container_name: telegram_bot
+    command: python notifications/connect_tgbot.py
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always
 
 volumes:
   postgres_data:
