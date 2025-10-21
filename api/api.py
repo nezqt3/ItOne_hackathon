@@ -186,7 +186,7 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
             self._send_json_response(400, {"error": str(e)})
 
 if __name__ == '__main__':
-    server = HTTPServer(('localhost', 8000), SimpleAPIHandler)
+    server = HTTPServer(('0.0.0.0', 3000), SimpleAPIHandler)
     threading.Thread(target=redis.listener, daemon=True).start()
-    print("Server running on http://localhost:8000")
+    print("Server running on http://localhost:3000")
     server.serve_forever()
