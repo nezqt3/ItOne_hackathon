@@ -1,0 +1,24 @@
+[
+  {
+    "transaction_id": "tx_001",
+    "correlation_id": "corr_001",
+    "timestamp": "2025-10-22T12:30:00",
+    "sender_account": "ACC12345",
+    "receiver_account": "ACC67890",
+    "amount": 2500.75,
+    "transaction_type": "payment",
+    "merchant_category": "electronics",
+    "location": "Moscow"
+  },
+  {
+    "transaction_id": "tx_002",
+    "correlation_id": "corr_002",
+    "timestamp": "2025-10-22T13:10:00",
+    "sender_account": "ACC54321",
+    "receiver_account": "ACC09876",
+    "amount": 1200.0,
+    "transaction_type": "transfer",
+    "merchant_category": "grocery",
+    "location": "Saint Petersburg"
+  }
+]

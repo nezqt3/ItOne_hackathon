@@ -1,0 +1,17 @@
+{% extends "admin/base_site.html" %} {% load static %} {% block content %}
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <p>
+    <label for="id_json_file">Выберите JSON-файл:</label><br />
+    <input
+      type="file"
+      name="json_file"
+      id="id_json_file"
+      accept=".json"
+      required
+    />
+  </p>
+  <button type="submit" class="default">Импортировать</button>
+  <a href=".." class="button cancel-link">Отмена</a>
+</form>
+{% endblock %}

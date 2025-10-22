@@ -1,8 +1,8 @@
 from django.db import models
 
 class Transactions(models.Model):
-    transaction_id = models.IntegerField(primary_key=True, unique=True)
-    correlation_id = models.IntegerField()
+    transaction_id = models.CharField(primary_key=True, unique=True, max_length=50)
+    correlation_id = models.CharField(max_length=50)
     timestamp = models.DateTimeField()
     sender_account = models.CharField(max_length=255)
     receiver_account = models.CharField(max_length=255)
@@ -12,5 +12,5 @@ class Transactions(models.Model):
     location = models.CharField(max_length=30)
 
 class TransactionsTypes(models.Model):
-    transaction_id = models.IntegerField(primary_key=True)
+    transaction_id = models.CharField(primary_key=True, unique=True, max_length=50)
     transaction_type = models.CharField(max_length=30)
