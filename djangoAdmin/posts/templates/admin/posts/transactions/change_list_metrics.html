@@ -38,14 +38,12 @@
   const chart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: ['Imported', 'Failed', 'Types Created', 'Types Updated', 'Notifications Success', 'Notifications Failed', 'Alerts Total', 'Alerts Failed'],
+      labels: ['Imported', 'Failed', 'Notifications Success', 'Notifications Failed', 'Alerts Total', 'Alerts Failed'],
       datasets: [{
         label: 'Metrics',
         data: [
           {{ metrics.transactions.imported }},
           {{ metrics.transactions.failed }},
-          {{ metrics.types.created }},
-          {{ metrics.types.updated }},
           {{ metrics.notifications.success }},
           {{ metrics.notifications.failed }},
           {{ metrics.alerts.total }},

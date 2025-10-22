@@ -1,0 +1,41 @@
+{% extends "admin/change_list.html" %} {% block content %}
+<div
+  style="
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+  "
+>
+  <h3>Transaction Types Metrics</h3>
+  <p>
+    Types: Created {{ metrics.types.created }}, Updated
+    {{metrics.types.updated}}
+  </p>
+</div>
+
+<canvas id="typesChart" width="600" height="300"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const ctx = document.getElementById('typesChart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Types Created', 'Types Updated'],
+      datasets: [{
+        label: 'Metrics',
+        data: [
+          {{ metrics.types.created }},
+          {{ metrics.types.updated }},
+        ],
+        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+        borderColor: 'rgba(75, 192, 192, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: { scales: { y: { beginAtZero: true } } }
+  });
+</script>
+
+{{ block.super }} {% endblock %}

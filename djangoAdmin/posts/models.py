@@ -70,3 +70,11 @@ class TransactionLog(models.Model):
 
     def __str__(self):
         return f"[{self.level}] {self.component} — {self.transaction.transaction_id}"
+    
+class Metric(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    value = models.IntegerField(default=0)
+    
+    def increment(self, amount=1):
+        self.value += amount
+        self.save()

@@ -2,11 +2,11 @@ from posts.models import TransactionLog, Transactions
 from django.utils import timezone
 
 def log_transaction_event(
-    transaction_id: str,
-    correlation_id: str,
-    level: str,
-    component: str,
-    message: str,
+    transaction_id: str = None,
+    correlation_id: str = None,
+    level: str = None,
+    component: str = None,
+    message: str = None,
     data: dict = None
 ):
     """Создает запись лога для транзакции"""
