@@ -1,0 +1,65 @@
+{% extends "admin/base_site.html" %} {% load static %} {% block content %}
+<h1>Transaction Metrics Overview</h1>
+
+<div
+  style="
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+    background: #f9f9f9;
+    margin-bottom: 20px;
+  "
+>
+  <p>
+    <strong>Transactions:</strong> Imported {{ metrics.transactions.imported }},
+    Failed {{ metrics.transactions.failed }}
+  </p>
+  <p>
+    <strong>Transaction Types:</strong> Created {{ metrics.types.created }},
+    Updated {{ metrics.types.updated }}
+  </p>
+  <p>
+    <strong>Notifications:</strong> Success {{ metrics.notifications.success }},
+    Failed {{ metrics.notifications.failed }}
+  </p>
+  <p>
+    <strong>Alerts:</strong> Total {{ metrics.alerts.total }}, Failed {{
+    metrics.alerts.failed }}
+  </p>
+</div>
+
+<canvas id="metricsChart" width="800" height="300"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const ctx = document.getElementById('metricsChart').getContext('2d');
+  const metricsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+          labels: [
+              'Transactions Imported', 'Transactions Failed',
+              'Types Created', 'Types Updated',
+              'Notifications Success', 'Notifications Failed',
+              'Alerts Total', 'Alerts Failed'
+          ],
+          datasets: [{
+              label: 'Count',
+              data: [
+                  {{ metrics.transactions.imported }},
+                  {{ metrics.transactions.failed }},
+                  {{ metrics.types.created }},
+                  {{ metrics.types.updated }},
+                  {{ metrics.notifications.success }},
+                  {{ metrics.notifications.failed }},
+                  {{ metrics.alerts.total }},
+                  {{ metrics.alerts.failed }}
+              ],
+              backgroundColor: [
+                  '#4caf50', '#f44336', '#2196f3', '#ff9800',
+                  '#8bc34a', '#e91e63', '#607d8b', '#ff5722'
+              ]
+          }]
+      },
+      options: { scales: { y: { beginAtZero: true } } }
+  });
+</script>
+{% endblock %}

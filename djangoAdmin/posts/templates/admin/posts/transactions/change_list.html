@@ -3,4 +3,72 @@
 <li>
   <a href="{{ import_url }}" class="addlink">Import JSON</a>
 </li>
+<div
+  style="
+    margin-top: 10px;
+    padding: 10px;
+    display: flex;
+    gap: 12px;
+    flex-direction: column;
+  "
+>
+  <!-- Карточки метрик -->
+  <div
+    style="
+      flex: 1 1 90px;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    "
+  >
+    <h4 style="margin: 0 0 8px 0">💰 Транзакции</h4>
+    <div style="color: green">
+      ✅ Импортировано: {{ metrics.transactions.imported }}
+    </div>
+    <div style="color: red">❌ Ошибки: {{ metrics.transactions.failed }}</div>
+  </div>
+
+  <div
+    style="
+      flex: 1 1 90px;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    "
+  >
+    <h4 style="margin: 0 0 8px 0">📂 Типы транзакций</h4>
+    <div>🟢 Создано: {{ metrics.types.created }}</div>
+    <div>🟠 Обновлено: {{ metrics.types.updated }}</div>
+  </div>
+
+  <div
+    style="
+      flex: 1 1 90px;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    "
+  >
+    <h4 style="margin: 0 0 8px 0">📣 Уведомления</h4>
+    <div style="color: green">
+      ✅ Успешные: {{ metrics.notifications.success }}
+    </div>
+    <div style="color: red">
+      ❌ Неудачные: {{ metrics.notifications.failed }}
+    </div>
+  </div>
+
+  <div
+    style="
+      flex: 1 1 90px;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    "
+  >
+    <h4 style="margin: 0 0 8px 0">🚨 Алерты</h4>
+    <div>ℹ️ Всего: {{ metrics.alerts.total }}</div>
+    <div style="color: red">❌ Не обработано: {{ metrics.alerts.failed }}</div>
+  </div>
+</div>
 {% endblock %}

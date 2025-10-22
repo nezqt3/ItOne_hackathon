@@ -5,10 +5,13 @@ certifi==2025.10.5
 charset-normalizer==3.4.4
 click==8.3.0
 Django==5.2.7
+django-prometheus==2.4.1
+django-simple-history==3.10.1
 dotenv==0.9.9
 fastapi==0.119.0
 h11==0.16.0
 idna==3.11
+prometheus_client==0.23.1
 psycopg==3.2.11
 psycopg2-binary==2.9.11
 pydantic==2.12.3

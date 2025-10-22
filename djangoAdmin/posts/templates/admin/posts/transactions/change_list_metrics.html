@@ -1,0 +1,63 @@
+{% extends "admin/change_list.html" %} {% block object-tools-items %}
+{{block.super }}
+<li>
+  <a href="{{ import_url }}" class="addlink">Import JSON</a>
+</li>
+{% endblock %} {% block content %}
+<div
+  style="
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+  "
+>
+  <h3>Metrics</h3>
+  <p>
+    Transactions: Imported {{ metrics.transactions.imported }}, Failed
+    {{metrics.transactions.failed }}
+  </p>
+  <p>
+    Transaction Types: Created {{ metrics.types.created }}, Updated
+    {{metrics.types.updated }}
+  </p>
+  <p>
+    Notifications: Success {{ metrics.notifications.success }}, Failed
+    {{metrics.notifications.failed }}
+  </p>
+  <p>
+    Alerts: Total {{ metrics.alerts.total }}, Failed {{ metrics.alerts.failed }}
+  </p>
+</div>
+
+<canvas id="transactionsChart" width="600" height="300"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const ctx = document.getElementById('transactionsChart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Imported', 'Failed', 'Types Created', 'Types Updated', 'Notifications Success', 'Notifications Failed', 'Alerts Total', 'Alerts Failed'],
+      datasets: [{
+        label: 'Metrics',
+        data: [
+          {{ metrics.transactions.imported }},
+          {{ metrics.transactions.failed }},
+          {{ metrics.types.created }},
+          {{ metrics.types.updated }},
+          {{ metrics.notifications.success }},
+          {{ metrics.notifications.failed }},
+          {{ metrics.alerts.total }},
+          {{ metrics.alerts.failed }}
+        ],
+        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+        borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: { scales: { y: { beginAtZero: true } } }
+  });
+</script>
+
+{{ block.super }} {% endblock %}

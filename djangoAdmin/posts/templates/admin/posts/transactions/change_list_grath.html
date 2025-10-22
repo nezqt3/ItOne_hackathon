@@ -1,0 +1,42 @@
+{% extends "admin/change_list.html" %} {% block content %} {{ block.super }}
+
+<h2 style="margin-top: 20px">Метрики транзакций</h2>
+<canvas id="metricsChart" width="800" height="400"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const ctx = document.getElementById('metricsChart').getContext('2d');
+  const metricsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+          labels: ['Transactions Imported', 'Transactions Failed', 'Types Created', 'Types Updated', 'Notifications Success', 'Notifications Failed', 'Alerts Total', 'Alerts Failed'],
+          datasets: [{
+              label: 'Count',
+              data: [
+                  {{ metrics.transactions.imported }},
+                  {{ metrics.transactions.failed }},
+                  {{ metrics.types.created }},
+                  {{ metrics.types.updated }},
+                  {{ metrics.notifications.success }},
+                  {{ metrics.notifications.failed }},
+                  {{ metrics.alerts.total }},
+                  {{ metrics.alerts.failed }}
+              ],
+              backgroundColor: [
+                  '#4caf50', '#f44336', '#2196f3', '#ff9800', '#8bc34a', '#e91e63', '#607d8b', '#ff5722'
+              ]
+          }]
+      },
+      options: {
+          responsive: true,
+          plugins: {
+              legend: { display: false },
+              tooltip: { mode: 'index', intersect: false }
+          },
+          scales: {
+              y: { beginAtZero: true }
+          }
+      }
+  });
+</script>
+{% endblock %}
