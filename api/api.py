@@ -3,6 +3,7 @@ import json
 import csv
 import tempfile
 import os
+import io
 from queue import Queue
 import re
 import sys
@@ -152,12 +153,13 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
             self.wfile.write(b'{"error": "No transactions available"}')
             return
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, newline='', encoding='utf-8') as f:
+            output = io.StringIO()
             writer = csv.writer(f)
             headers = ['transaction_id', 'timestamp', 'sender_account', 'receiver_account',
                        'amount', 'transaction_type', 'merchant_category', 'location']
             writer.writerow(headers)
             for transaction in transactions:
-                row = [
+                writer.writerow([
                     transaction.get('transaction_id', ''),
                     transaction.get('timestamp', ''),
                     transaction.get('sender_account', ''),
@@ -166,17 +168,22 @@ class SimpleAPIHandler(BaseHTTPRequestHandler):
                     transaction.get('transaction_type', ''),
                     transaction.get('merchant_category', ''),
                     transaction.get('location', '')
-                ]
-                writer.writerow(row)
-            temp_path = f.name
+                ])
+
+        csv_data = output.getvalue().encode('utf-8')
+        output.close()
+
+        # Отправка ответа с CSV
         self.send_response(200)
-        self.send_header('Content-type', 'text/csv')
-        self.send_header('Content-Disposition',
-                         f'attachment; filename="transactions_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"')
+        self.send_header('Content-Type', 'text/csv; charset=utf-8')
+        self.send_header(
+            'Content-Disposition',
+            f'attachment; filename="transactions_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+        )
+        self.send_header('Content-Length', str(len(csv_data)))
         self.end_headers()
-        with open(temp_path, 'rb') as f:
-            self.wfile.write(f.read())
-        os.unlink(temp_path)
+
+        self.wfile.write(csv_data)
         
     def _send_notification(self, data):
         try:
