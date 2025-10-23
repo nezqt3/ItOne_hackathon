@@ -21,3 +21,8 @@
   <li>Prometheus</li>
   <li>Docker + Docker Compose</li>
 </ul>
+
+<h2>REST endpoints</h2>
+<ul>
+  <li></li>
+</ul>
