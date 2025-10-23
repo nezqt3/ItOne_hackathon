@@ -27,7 +27,7 @@ class RulesForm(forms.ModelForm):
     )
 
 class RulesAdmin(admin.ModelAdmin):
-    list_display = ('name', 'rule_type', 'is_active', 'created_at', 'updated_at')
+    list_display = ('name', 'rule_type', 'is_active', 'created_by', 'updated_by', 'created_at', 'updated_at')
     list_filter = ('is_active', 'rule_type')
     search_fields = ('name', 'description')
     actions = ['enable_rules', 'disable_rules']
@@ -45,15 +45,17 @@ class RulesAdmin(admin.ModelAdmin):
         ('Composite settings', {
             'fields': ('composite_conditions',),
         }),
+        ('Audit info', {
+            'fields': ('created_by', 'updated_by', 'created_at', 'updated_at'),
+        }),
     )
 
-    def enable_rules(self, request, queryset):
-        updated = queryset.update(is_active=True)
-        self.message_user(request, f"{updated} правил включено")
-    enable_rules.short_description = "Enable selected rules"
+    readonly_fields = ('created_by', 'updated_by', 'created_at', 'updated_at')
 
-    def disable_rules(self, request, queryset):
-        updated = queryset.update(is_active=False)
-        self.message_user(request, f"{updated} правил отключено")
-    disable_rules.short_description = "Disable selected rules"
+    def save_model(self, request, obj, form, change):
+        """Автоматически сохраняем автора и последнего редактора"""
+        if not obj.created_by:
+            obj.created_by = request.user
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
 

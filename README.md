@@ -19,4 +19,5 @@
   <li>TelegramBotApi</li>
   <li>Grafana</li>
   <li>Prometheus</li>
+  <li>Docker + Docker Compose</li>
 </ul>

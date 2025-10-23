@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from simple_history.models import HistoricalRecords
+from django.contrib.auth import get_user_model
 import json
 
 RULE_TYPES = [
@@ -16,6 +17,8 @@ RULE_OPERATORS = [
     ('<=', 'Less or equal (<=)'),
     ('==', 'Equal (==)'),
 ]
+
+User = get_user_model()
 
 class Rules(models.Model):
     name = models.CharField(max_length=255)
@@ -35,9 +38,25 @@ class Rules(models.Model):
     # --- Composite rule ---
     composite_conditions = models.JSONField(blank=True, null=True, help_text="Список условий для composite")
 
+    created_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="rules_created"
+    )
+    updated_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="rules_updated"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()
+
+    def save(self, *args, **kwargs):
+        super_should_save = True
+
+        # Сохраняем только если нужно (чтобы избежать циклов)
+        if self.is_active:
+            Rules.objects.filter(rule_type=self.rule_type).exclude(pk=self.pk).update(is_active=False)
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.rule_type})"
@@ -45,7 +64,7 @@ class Rules(models.Model):
 class Transactions(models.Model):
     # 🔹 Основные поля
     transaction_id = models.CharField(primary_key=True, unique=True, max_length=50)
-    correlation_id = models.CharField(max_length=50, blank=True, null=True)
+    correlation_id = models.CharField(max_length=50, blank=True, null=True, db_index=True, help_text="ID корреляции для трассировки между системами")
     timestamp = models.DateTimeField(default=timezone.now)
     sender_account = models.CharField(max_length=255)
     receiver_account = models.CharField(max_length=255)

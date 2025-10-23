@@ -38,7 +38,27 @@ class TransactionsAdmin(admin.ModelAdmin):
     )
     list_filter = ('transaction_type', 'status', 'timestamp')
     search_fields = ('transaction_id', 'correlation_id', 'sender_account', 'receiver_account')
+    readonly_fields = ('correlation_id',)
+    list_filter_frauds = ("is_fraud", "status")
+    
     change_list_template = "posts/templates/admin/posts/transactions/change_list_metrics.html"
+    
+    actions = ["view_logs_for_transaction"]
+
+    def view_logs_for_transaction(self, request, queryset):
+        """Позволяет в админке быстро посмотреть логи по correlation_id"""
+        from posts.models.models import TransactionLog
+        for tx in queryset:
+            logs = TransactionLog.objects.filter(correlation_id=tx.correlation_id).order_by("created_at")
+            if not logs.exists():
+                self.message_user(request, f"⛔ Логи не найдены для correlation_id={tx.correlation_id}")
+            else:
+                for log in logs:
+                    self.message_user(
+                        request,
+                        f"[{log.component.upper()}][{log.level}] {log.message}"
+                    )
+    view_logs_for_transaction.short_description = "Показать логи транзакции"
 
     def has_add_permission(self, request):
         return False
