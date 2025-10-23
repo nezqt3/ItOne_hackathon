@@ -6,7 +6,7 @@
   <li>docker-compose up -d</li>
   <li>docker-compose exec web python djangoAdmin/manage.py migrate</li>
   <li>docker-compose exec web python djangoAdmin/manage.py createsuperuser</li>
-  <li>docker-compose exec web python djangoAdmin/manage.py makemigrations (для миграций)</li>
+  <li>docker-compose exec web python djangoAdmin/manage.py makemigrations</li>
 </ul>
 
 <h2>Стек технологий</h2>
