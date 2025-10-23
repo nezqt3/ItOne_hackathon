@@ -151,7 +151,12 @@ class TransactionLog(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
-    transaction = models.ForeignKey(Transactions, on_delete=models.CASCADE, related_name='logs')
+    transaction = models.ForeignKey(
+        Transactions,
+        on_delete=models.CASCADE,
+        null=True,   # разрешаем null
+        blank=True
+    )
     correlation_id = models.CharField(max_length=50)
     level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='INFO')
     component = models.CharField(max_length=20, choices=COMPONENT_CHOICES)
@@ -163,7 +168,9 @@ class TransactionLog(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"[{self.level}] {self.component} — {self.transaction.transaction_id}"
+        if self.transaction:
+            return self.transaction.transaction_id
+        return f"Log without transaction ({self.component} - {self.level})"
     
 class Metric(models.Model):
     name = models.CharField(max_length=255, unique=True)

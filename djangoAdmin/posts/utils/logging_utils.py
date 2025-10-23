@@ -9,18 +9,21 @@ def log_transaction_event(
     message: str = None,
     data: dict = None
 ):
-    """Создает запись лога для транзакции"""
-    try:
-        tx = Transactions.objects.get(transaction_id=transaction_id)
-    except Transactions.DoesNotExist:
-        return  # транзакция еще не в БД — можно пропустить или логировать отдельно
+    """Создает запись лога для транзакции или общего события"""
+    if transaction_id:
+        try:
+            tx = Transactions.objects.get(transaction_id=transaction_id)
+        except Transactions.DoesNotExist:
+            tx = None
+    else:
+        tx = None
 
     TransactionLog.objects.create(
-        transaction=tx,
-        correlation_id=correlation_id,
-        level=level,
-        component=component,
-        message=message,
+        transaction=tx,  # может быть None
+        correlation_id=correlation_id or f"GEN-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+        level=level or "INFO",
+        component=component or "general",
+        message=message or "",
         structured_data=data or {},
         created_at=timezone.now()
     )
