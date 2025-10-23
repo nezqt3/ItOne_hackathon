@@ -1,4 +1,4 @@
-from posts.models import TransactionLog, Transactions
+from posts.models.models import TransactionLog, Transactions
 from django.utils import timezone
 
 def log_transaction_event(

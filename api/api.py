@@ -16,7 +16,9 @@ from typing import Dict, List, Optional
 import time
 import signal
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))\
+    
+from methods.threerules import threshold_rule, pattern_rule, composite_rule
 
 class CorrelationFilter(logging.Filter):
     def filter(self, record):
@@ -252,6 +254,8 @@ class FraudDetectionAPIHandler(BaseHTTPRequestHandler):
                 self._import_json_data(data, correlation_id)
             elif self.path == '/notifications/create':
                 self._send_notification(data, correlation_id)
+            elif self.path == '/threshold':
+                self._check_threshold_rule(data)
             else:
                 self._send_json_response(404, {"error": "Endpoint not found"}, correlation_id)
         except json.JSONDecodeError:
@@ -466,6 +470,24 @@ class FraudDetectionAPIHandler(BaseHTTPRequestHandler):
             logger.error(f"Notification failed: {str(e)}",
                          extra={'component': 'notifications', 'correlation_id': correlation_id})
             self._send_json_response(400, {"error": str(e)}, correlation_id)
+            
+    def _check_threshold_rule(self, data: Dict):
+        print(data)
+        try:
+            required_fields = ['id', 'amount', 'operation', "number"]
+            for field in required_fields:
+                if field not in data:
+                    self._send_json_response(400, {"error": f"Missing field: {field}"})
+                    return
+            
+            amount = str(data['amount'])
+            operation = data['operation']
+            number = str(data['number'])
+            
+            bool = threshold_rule(amount, operation, number)
+            self._send_json_response(200, {"message": "Threshold checking", "result": bool})
+        except Exception as e:
+            self._send_json_response(400, {"error": str(e)})
 
 def shutdown(signum, frame):
     logger.info("Shutting down...", extra={'component': 'shutdown', 'correlation_id': 'system'})

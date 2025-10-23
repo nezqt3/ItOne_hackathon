@@ -6,9 +6,9 @@ import json
 from prometheus_client import Counter, Histogram
 from posts.utils.logging_utils import log_transaction_event
 from django.db import transaction as db_transaction
-from posts.models import Metric
+from posts.models.models import Metric
 import requests
-from posts.models import TransactionsTypes
+from posts.models.models import TransactionsTypes
 import time
 
 class TransactionsTypesAdmin(admin.ModelAdmin):

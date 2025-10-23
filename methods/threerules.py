@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-def threshold_rule(price,operation,number):
+def threshold_rule(price, operation: str, number):
     v = price + operation + number
     if eval(v): return True
     else: return False

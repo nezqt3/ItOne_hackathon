@@ -9,7 +9,7 @@ from posts.utils.logging_utils import log_transaction_event
 from django.db import transaction as db_transaction
 import requests
 from datetime import datetime
-from posts.models import Transactions, TransactionsTypes, TransactionLog, Rules
+from posts.models.models import Transactions, TransactionsTypes, TransactionLog, Rules
 import time
 
 class TransactionLogAdmin(admin.ModelAdmin):
@@ -17,3 +17,6 @@ class TransactionLogAdmin(admin.ModelAdmin):
     list_filter = ('level', 'component', 'created_at')
     search_fields = ('transaction__transaction_id', 'message', 'correlation_id')
     readonly_fields = ('transaction', 'correlation_id', 'level', 'component', 'message', 'structured_data', 'created_at')
+    
+    def has_add_permission(self, request):
+        return False
