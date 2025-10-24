@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta
 
-def threshold_rule(price, operation: str, number):
-    v = price + operation + number
+#ФОРМАТ: сколько, операция в админке, кол-во в админке
+def threshold_rule(price,operation,number):
+    v = str(price) + str(operation) + str(number)
     if eval(v): return True
     else: return False
 
+#ФОРМАТ: кому,сколько, операция, сумма операции , временное окно, кол-во операций, данные
 def pattern_rule(receiver, money, pat_oper, pat_quant, window,time_t, oper_quant, data_for_this_oper):
     if time_t == "minutes": td = timedelta(minutes=window)
     elif time_t == "hours": td = timedelta(hours=window)
@@ -17,13 +19,15 @@ def pattern_rule(receiver, money, pat_oper, pat_quant, window,time_t, oper_quant
             ed+=1
     if ed >= oper_quant: return True
     else: return False
-    
+
+#ФОРМАТ: булевое выражение, денег заплачено, время операции    
 def composite_rule(bulev,amount,time):
-    bulev = bulev.replace(" ","").replace("amount",str(amount)).replace("AND","and").replace("OR","or").replace("NOT","not")
+    bulev = str(bulev).replace(" ","").replace("amount",str(amount)).replace("AND","and").replace("OR","or").replace("NOT","not")
     if "00:00:00"<=time.split()[1]<="06:00:00": bulev = bulev.replace("nighttime","True").replace("daytime","False")
     else: bulev = bulev.replace("nighttime","False").replace("daytime","True")
     return eval(bulev)
 
+'''
 operations = [">=",">","<=","<","==","!="] # в панели ≥, >, ≤, <, =, !=
 
 DATA = [("2025.10.19 00:00:09",111111,222222,12000),("2025.10.19 15:06:12",111111,222222,12000),("2025.10.19 15:06:30",111111,222222,12000)]
@@ -54,3 +58,4 @@ for i in range(0,len(DATA)):
     #ФОРМАТ: кому,сколько, операция, сумма операции , временное окно, кол-во операций, данные
     composite_ans = composite_rule(composite_bulev,DATA[i][3],DATA[i][0])
     print(threshold_ans, pattern_ans,composite_ans)
+'''
