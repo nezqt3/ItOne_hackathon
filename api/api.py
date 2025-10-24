@@ -19,7 +19,7 @@ import signal
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     
 # from methods.threerules import threshold_rule, pattern_rule, composite_rule
-from notifications.notification import Redis
+from notifications.notification import RedisHandler
 
 class CorrelationFilter(logging.Filter):
     def filter(self, record):
@@ -40,7 +40,7 @@ logging.basicConfig(
 logger = logging.getLogger()
 logger.addFilter(CorrelationFilter())
 
-redis = Redis()
+redis = RedisHandler()
 WORKER_COUNT = 4
 MAX_QUEUE_SIZE = 1000
 transactions: Dict[str, Dict] = {}
@@ -504,7 +504,8 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
     server = HTTPServer(('0.0.0.0', 3000), FraudDetectionAPIHandler)
-    threading.Thread(target=redis.listener, daemon=True).start()
+    listener_thread = threading.Thread(target=redis.listener, daemon=True, name="RedisListener")
+    listener_thread.start()
     print("Fraud Detection API Server running on http://0.0.0.0:3000")
     print(f"Worker threads: {WORKER_COUNT}, Max queue size: {MAX_QUEUE_SIZE}")
     print("Supported transaction fields:")

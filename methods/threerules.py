@@ -6,7 +6,7 @@ def threshold_rule(price,operation,number):
     if eval(v): return True
     else: return False
 
-#ФОРМАТ: кому,сколько, операция, сумма операции , временное окно, кол-во операций, данные
+#ФОРМАТ: кому, сколько, операция, сумма операции , временное окно, кол-во операций, данные
 def pattern_rule(receiver, money, pat_oper, pat_quant, window,time_t, oper_quant, data_for_this_oper):
     if time_t == "minutes": td = timedelta(minutes=window)
     elif time_t == "hours": td = timedelta(hours=window)
@@ -15,7 +15,7 @@ def pattern_rule(receiver, money, pat_oper, pat_quant, window,time_t, oper_quant
     ed = 0
     for search in data_for_this_oper:
         if window_start <=search[0] <= datetime.now().strftime("%Y.%m.%d %H:%M:%S") and search[2] == receiver\
-           and threshold_rule(str(search[3]), operations[pat_oper], pat_quant):
+           and threshold_rule(str(search[3]), pat_oper, pat_quant):
             ed+=1
     if ed >= oper_quant: return True
     else: return False
