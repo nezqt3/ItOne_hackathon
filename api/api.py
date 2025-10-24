@@ -348,13 +348,15 @@ class FraudDetectionAPIHandler(BaseHTTPRequestHandler):
             result["errors"] = errors[:10]
         self._send_json_response(207, result, correlation_id)
 
-    def _export_to_csv(self, correlation_id: str):
+    def _export_to_csv(self, transactions: list[dict], correlation_id: str):
         if not transactions:
             self._send_json_response(404, {"error": "No transactions available"}, correlation_id)
             return
+
         try:
             output = io.StringIO()
             writer = csv.writer(output)
+
             headers = [
                 'transaction_id', 'timestamp', 'sender_account', 'receiver_account',
                 'amount', 'transaction_type', 'merchant_category', 'location',
@@ -364,7 +366,9 @@ class FraudDetectionAPIHandler(BaseHTTPRequestHandler):
                 'status', 'received_at', 'processed_at'
             ]
             writer.writerow(headers)
-            for tx in transactions.values():
+
+            # Заполняем строки CSV
+            for tx in transactions:
                 writer.writerow([
                     tx.get('transaction_id', ''),
                     tx.get('timestamp', ''),
@@ -389,21 +393,28 @@ class FraudDetectionAPIHandler(BaseHTTPRequestHandler):
                     tx.get('received_at', ''),
                     tx.get('processed_at', '')
                 ])
+
             csv_data = output.getvalue().encode('utf-8')
             output.close()
+
+            # Отправка CSV клиенту
             self.send_response(200)
             self.send_header('Content-Type', 'text/csv; charset=utf-8')
-            self.send_header('Content-Disposition',
-                             f'attachment; filename="transactions_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"')
+            self.send_header(
+                'Content-Disposition',
+                f'attachment; filename="transactions_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+            )
             self.send_header('Content-Length', str(len(csv_data)))
             self._set_cors_headers()
             self.end_headers()
             self.wfile.write(csv_data)
+
             logger.info(f"CSV export completed: {len(transactions)} transactions",
                         extra={'component': 'export', 'correlation_id': correlation_id})
+
         except Exception as e:
             logger.error(f"CSV export failed: {str(e)}",
-                         extra={'component': 'export', 'correlation_id': correlation_id})
+                        extra={'component': 'export', 'correlation_id': correlation_id})
             self._send_json_response(500, {"error": "Export failed"}, correlation_id)
 
     def _get_transactions_list(self, query_string: str, correlation_id: str):

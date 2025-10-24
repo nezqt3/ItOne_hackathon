@@ -5,6 +5,8 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.db import transaction as db_transaction
 from datetime import datetime
+from django.http import HttpResponse
+import csv
 import requests, json, time
 from posts.utils.transaction_importer import import_transactions
 from prometheus_client import Counter, Histogram
@@ -44,6 +46,22 @@ class TransactionsAdmin(admin.ModelAdmin):
     change_list_template = "posts/templates/admin/posts/transactions/change_list_metrics.html"
     
     actions = ["view_logs_for_transaction"]
+    
+    def export_csv_view(self, request):
+        """Вызываем API для экспорта CSV и отдаем пользователю"""
+        api_url = "http://api:3000/transactions/export-csv"
+        try:
+            r = requests.get(api_url, timeout=10)
+            r.raise_for_status()
+            response = redirect(api_url)
+            return r.content and HttpResponse(
+                r.content,
+                content_type='text/csv',
+                headers={'Content-Disposition': f'attachment; filename="transactions.csv"'}
+            )
+        except Exception as e:
+            self.message_user(request, f"Ошибка при экспорте CSV: {e}", level="error")
+            return redirect("..")
 
     def view_logs_for_transaction(self, request, queryset):
         """Позволяет в админке быстро посмотреть логи по correlation_id"""
@@ -82,6 +100,7 @@ class TransactionsAdmin(admin.ModelAdmin):
 
         # Контекст для шаблона
         extra_context['import_url'] = reverse("admin:import_json")
+        extra_context['export_url'] = reverse("admin:transactions_export_csv")
         extra_context['metrics'] = {
             'transactions': {
                 'imported': imported_metric.value,
@@ -111,6 +130,7 @@ class TransactionsAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom = [
+            path('export-csv/', self.admin_site.admin_view(self.export_csv_view), name='transactions_export_csv'),
             path('import-json/', self.admin_site.admin_view(self.import_json), name='import_json'),
         ]
         return custom + urls
