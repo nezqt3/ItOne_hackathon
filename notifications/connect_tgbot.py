@@ -22,3 +22,4 @@ class Bot(object):
                 response = requests.post(self.url, json=payload, timeout=5)
             except:
                 print("Не удалось")
+                

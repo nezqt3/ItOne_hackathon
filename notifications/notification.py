@@ -1,10 +1,14 @@
 import redis
 from dotenv import load_dotenv
-from notifications.connect_tgbot import Bot
 from notifications.email_sender import EmailSender
 import os
 import time
 import json
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from notifications.connect_tgbot import Bot
 
 load_dotenv()
 

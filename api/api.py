@@ -16,9 +16,10 @@ from typing import Dict, List, Optional
 import time
 import signal
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))\
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     
-from methods.threerules import threshold_rule, pattern_rule, composite_rule
+# from methods.threerules import threshold_rule, pattern_rule, composite_rule
+from notifications.notification import Redis
 
 class CorrelationFilter(logging.Filter):
     def filter(self, record):
@@ -38,13 +39,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger()
 logger.addFilter(CorrelationFilter())
-
-class Redis:
-    def send_alert(self, id, details, severity):
-        logger.info(f"Alert sent: {id}, {details}, {severity}",
-                    extra={'component': 'notifications', 'correlation_id': id})
-    def listener(self):
-        pass
 
 redis = Redis()
 WORKER_COUNT = 4
@@ -482,23 +476,23 @@ class FraudDetectionAPIHandler(BaseHTTPRequestHandler):
                          extra={'component': 'notifications', 'correlation_id': correlation_id})
             self._send_json_response(400, {"error": str(e)}, correlation_id)
             
-    def _check_threshold_rule(self, data: Dict):
-        print(data)
-        try:
-            required_fields = ['id', 'amount', 'operation', "number"]
-            for field in required_fields:
-                if field not in data:
-                    self._send_json_response(400, {"error": f"Missing field: {field}"})
-                    return
+    # def _check_threshold_rule(self, data: Dict):
+    #     print(data)
+    #     try:
+    #         required_fields = ['id', 'amount', 'operation', "number"]
+    #         for field in required_fields:
+    #             if field not in data:
+    #                 self._send_json_response(400, {"error": f"Missing field: {field}"})
+    #                 return
             
-            amount = str(data['amount'])
-            operation = data['operation']
-            number = str(data['number'])
+    #         amount = str(data['amount'])
+    #         operation = data['operation']
+    #         number = str(data['number'])
             
-            bool = threshold_rule(amount, operation, number)
-            self._send_json_response(200, {"message": "Threshold checking", "result": bool})
-        except Exception as e:
-            self._send_json_response(400, {"error": str(e)})
+    #         bool = threshold_rule(amount, operation, number)
+    #         self._send_json_response(200, {"message": "Threshold checking", "result": bool})
+    #     except Exception as e:
+    #         self._send_json_response(400, {"error": str(e)})
 
 def shutdown(signum, frame):
     logger.info("Shutting down...", extra={'component': 'shutdown', 'correlation_id': 'system'})
