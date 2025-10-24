@@ -180,83 +180,118 @@ def apply_rules(tx_obj):
     return triggered_rules
 
 
-def import_transactions(data: list, source: str = "api_or_admin") -> dict:
+def import_transactions(data: list, source: str = "api_or_admin", task_id: str = None) -> dict:
+    """
+    Импортирует список транзакций и обновляет статус очереди.
+    task_id — идентификатор процесса импорта (UUID из API).
+    """
     imported, failed = 0, 0
+    total = len(data)
 
-    for tx in data:
-        start_time = time.time()
-        transaction_id = tx.get("transaction_id") or str(uuid.uuid4())
-        correlation_id = tx.get("correlation_id") or str(uuid.uuid4())
-        tx_serialized = serialize_transaction(tx)
+    # создаем или обновляем запись в TransactionQueue для отслеживания
+    if task_id:
+        queue_item, _ = TransactionQueue.objects.get_or_create(
+            transaction_id=task_id,
+            defaults={"status": "queued", "data": {"progress": 0}}
+        )
+    else:
+        queue_item = None
 
-        log_safe(transaction_id, correlation_id, "INFO", "import", "🚀 Начало обработки транзакции", data=tx_serialized)
+    log_safe(task_id, None, "INFO", "import", f"🚀 Начало импорта {total} транзакций (источник={source})")
 
-        existing_tx = Transactions.objects.filter(transaction_id=transaction_id).first()
-        if existing_tx and existing_tx.status in ["PROCESSED", "FAILED"]:
-            log_safe(transaction_id, correlation_id, "INFO", "import",
-                     f"🟡 Транзакция уже обработана ранее (status={existing_tx.status}), пропускаем.")
-            continue
+    try:
+        for i, tx in enumerate(data, start=1):
+            start_time = time.time()
+            transaction_id = tx.get("transaction_id") or str(uuid.uuid4())
+            correlation_id = tx.get("correlation_id") or str(uuid.uuid4())
+            tx_serialized = serialize_transaction(tx)
 
-        try:
-            timestamp = tx.get("timestamp")
-            if isinstance(timestamp, str):
-                timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            if timestamp.tzinfo is None:
-                timestamp = timezone.make_aware(timestamp)
-
-            defaults = {
-                "correlation_id": correlation_id,
-                "timestamp": timestamp,
-                "sender_account": tx.get("sender_account", "UNKNOWN_SENDER"),
-                "receiver_account": tx.get("receiver_account", "UNKNOWN_RECEIVER"),
-                "amount": tx.get("amount", 0.0),
-                "transaction_type": tx.get("transaction_type", "UNKNOWN"),
-                "location": tx.get("location"),
-                "device_used": tx.get("device_used", "unspecified"),
-                "is_fraud": False,
-                "fraud_type": None,
-                "status": tx.get("status", "NEW"),
-                "api_source": source,
-            }
-
-            with db_transaction.atomic():
-                obj, created = Transactions.objects.update_or_create(
-                    transaction_id=transaction_id,
-                    defaults=defaults
-                )
+            try:
                 log_safe(transaction_id, correlation_id, "DEBUG", "import",
-                         f"Объект транзакции {'создан' if created else 'обновлён'}")
+                         f"⚙️ Обработка транзакции {i}/{total}", data=tx_serialized)
 
-                triggered = apply_rules(obj)
-                if triggered:
-                    obj.is_fraud = True
-                    obj.fraud_type = ", ".join([r.name for r in triggered])
-                    obj.save(update_fields=["is_fraud", "fraud_type"])
-                    reason = f"⚠️ Сработали правила: {obj.fraud_type}"
-                    log_safe(transaction_id, correlation_id, "WARN", "rules", reason)
-                    send_notification(transaction_id, tx, correlation_id, reason=reason)
-                else:
-                    log_safe(transaction_id, correlation_id, "INFO", "rules", "✅ Правила не сработали")
+                timestamp = tx.get("timestamp")
+                if isinstance(timestamp, str):
+                    timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                if timestamp.tzinfo is None:
+                    timestamp = timezone.make_aware(timestamp)
 
-                queue_item = update_queue_status(transaction_id, "queued", correlation_id)
-                update_queue_status(transaction_id, "processing", correlation_id)
+                defaults = {
+                    "correlation_id": correlation_id,
+                    "timestamp": timestamp,
+                    "sender_account": tx.get("sender_account", "UNKNOWN_SENDER"),
+                    "receiver_account": tx.get("receiver_account", "UNKNOWN_RECEIVER"),
+                    "amount": tx.get("amount", 0.0),
+                    "transaction_type": tx.get("transaction_type", "UNKNOWN"),
+                    "location": tx.get("location"),
+                    "device_used": tx.get("device_used", "unspecified"),
+                    "is_fraud": False,
+                    "fraud_type": None,
+                    "status": tx.get("status", "NEW"),
+                    "api_source": source,
+                }
 
-                if not triggered:
-                    send_notification(transaction_id, tx, correlation_id, queue_item=queue_item)
+                with db_transaction.atomic():
+                    obj, created = Transactions.objects.update_or_create(
+                        transaction_id=transaction_id,
+                        defaults=defaults
+                    )
+                    log_safe(transaction_id, correlation_id, "DEBUG", "import",
+                             f"Транзакция {'создана' if created else 'обновлена'}")
 
-                obj.processing_time_ms = (time.time() - start_time) * 1000
-                obj.save(update_fields=["processing_time_ms"])
-                alert_delivery_time.observe(time.time() - start_time)
-                Metric.objects.get_or_create(name="transactions_imported_total")[0].increment()
+                    triggered = apply_rules(obj)
+                    if triggered:
+                        obj.is_fraud = True
+                        obj.fraud_type = ", ".join([r.name for r in triggered])
+                        obj.save(update_fields=["is_fraud", "fraud_type"])
+                        reason = f"⚠️ Сработали правила: {obj.fraud_type}"
+                        log_safe(transaction_id, correlation_id, "WARN", "rules", reason)
+                        send_notification(transaction_id, tx, correlation_id, reason=reason)
+                    else:
+                        log_safe(transaction_id, correlation_id, "INFO", "rules", "✅ Без нарушений")
 
-                log_safe(transaction_id, correlation_id, "INFO", "metrics",
-                         f"⏱️ Время обработки: {obj.processing_time_ms:.2f} ms")
-                imported += 1
+                    obj.processing_time_ms = (time.time() - start_time) * 1000
+                    obj.save(update_fields=["processing_time_ms"])
 
-        except Exception as e:
-            failed += 1
-            Metric.objects.get_or_create(name="transactions_failed_total")[0].increment()
-            log_safe(transaction_id, correlation_id, "ERROR", "import",
-                     f"❌ Ошибка импорта или уведомления: {e}", data=tx_serialized)
+                    Metric.objects.get_or_create(name="transactions_imported_total")[0].increment()
+                    alert_delivery_time.observe(time.time() - start_time)
 
-    return {"imported": imported, "failed": failed}
+                    imported += 1
+
+            except Exception as e:
+                failed += 1
+                Metric.objects.get_or_create(name="transactions_failed_total")[0].increment()
+                log_safe(transaction_id, correlation_id, "ERROR", "import",
+                         f"❌ Ошибка обработки транзакции: {e}", data=tx_serialized)
+
+            # обновляем прогресс
+            if queue_item:
+                progress = round((i / total) * 100, 2)
+                queue_item.status = "processing"
+                queue_item.data = {
+                    "progress": progress,
+                    "imported": imported,
+                    "failed": failed,
+                    "total": total
+                }
+                queue_item.save(update_fields=["status", "data"])
+
+        # Завершаем импорт
+        if queue_item:
+            queue_item.status = "completed" if failed == 0 else "completed_with_errors"
+            queue_item.data["progress"] = 100
+            queue_item.save(update_fields=["status", "data"])
+
+        log_safe(task_id, None, "INFO", "import",
+                 f"✅ Импорт завершён: {imported}/{total} успешно, {failed} ошибок")
+
+        return {"imported": imported, "failed": failed, "status": "completed"}
+
+    except Exception as e:
+        if queue_item:
+            queue_item.status = "failed"
+            queue_item.data = {"error": str(e)}
+            queue_item.save(update_fields=["status", "data"])
+
+        log_safe(task_id, None, "ERROR", "import", f"💥 Импорт прерван: {e}")
+        return {"imported": imported, "failed": failed, "status": "failed", "error": str(e)}

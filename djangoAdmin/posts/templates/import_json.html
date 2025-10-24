@@ -1,7 +1,9 @@
 {% extends "admin/base_site.html" %} {% load static %} {% block content %}
-<form method="post" enctype="multipart/form-data">
+<h1>Импортировать транзакции (JSON)</h1>
+
+<form id="importForm" enctype="multipart/form-data" method="post">
   {% csrf_token %}
-  <p>
+  <div style="margin-bottom: 1rem">
     <label for="id_json_file">Выберите JSON-файл:</label><br />
     <input
       type="file"
@@ -9,9 +11,123 @@
       id="id_json_file"
       accept=".json"
       required
+      style="margin-top: 5px"
     />
-  </p>
-  <button type="submit" class="default">Импортировать</button>
-  <a href="{% url 'admin:import_json' %}" class="button cancel-link">Отмена</a>
+  </div>
+
+  <button
+    type="submit"
+    class="default"
+    id="startButton"
+    style="color: white; border: none; padding: 8px 16px; border-radius: 4px"
+  >
+    Импортировать
+  </button>
+  <a
+    href="{% url 'admin:index' %}"
+    class="button cancel-link"
+    style="margin-left: 10px"
+  >
+    Отмена
+  </a>
 </form>
+
+<!-- Прогресс -->
+<div id="progressContainer" style="display: none; margin-top: 2rem">
+  <h3>📊 Статус импорта</h3>
+  <p>Статус: <span id="statusText">Подготовка...</span></p>
+  <progress
+    id="progressBar"
+    value="0"
+    max="100"
+    style="width: 100%; height: 20px"
+  ></progress>
+  <p><span id="progressValue">0%</span> завершено</p>
+</div>
+
+<!-- Результат -->
+<div id="resultContainer" style="display: none; margin-top: 1.5rem">
+  <h3>✅ Результат</h3>
+  <p id="resultMessage"></p>
+  <a
+    href="{% url 'admin:posts_transactions_changelist' %}"
+    class="button default"
+    style="
+      background-color: #28a745;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+    "
+  >
+    Вернуться к транзакциям
+  </a>
+</div>
+
+<script>
+  document
+    .getElementById("importForm")
+    .addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const fileInput = document.getElementById("id_json_file");
+      if (!fileInput.files.length) {
+        alert("Выберите JSON-файл!");
+        return;
+      }
+
+      // Прячем кнопку, показываем прогресс
+      document.getElementById("startButton").disabled = true;
+      document.getElementById("progressContainer").style.display = "block";
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+
+      // Запускаем импорт
+      const startRes = await fetch("/api/import/start/", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]")
+            .value,
+        },
+        body: formData,
+      });
+
+      const startData = await startRes.json();
+      if (!startData.task_id) {
+        alert("Ошибка запуска импорта: " + (startData.error || "Неизвестно"));
+        document.getElementById("startButton").disabled = false;
+        return;
+      }
+
+      const taskId = startData.task_id;
+
+      // Проверяем прогресс
+      const checkProgress = async () => {
+        const resp = await fetch(`/api/import/progress/${taskId}/`);
+        const data = await resp.json();
+
+        if (data.error) {
+          document.getElementById("statusText").textContent = "Ошибка";
+          document.getElementById("resultMessage").textContent = data.error;
+          document.getElementById("resultContainer").style.display = "block";
+          return;
+        }
+
+        document.getElementById("statusText").textContent = data.status;
+        document.getElementById("progressBar").value = data.progress;
+        document.getElementById("progressValue").textContent =
+          data.progress + "%";
+
+        if (data.status === "completed" || data.status === "failed") {
+          document.getElementById("resultContainer").style.display = "block";
+          document.getElementById("resultMessage").textContent = data.message;
+          return;
+        }
+
+        setTimeout(checkProgress, 1500);
+      };
+
+      checkProgress();
+    });
+</script>
 {% endblock %}
