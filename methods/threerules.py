@@ -2,23 +2,33 @@ from datetime import datetime, timedelta
 
 #ФОРМАТ: сколько, операция в админке, кол-во в админке
 def threshold_rule(price,operation,number):
-    v = str(price) + str(operation) + str(number)
-    if eval(v): return True
-    else: return False
+    price = float(price)
+    number = float(number)
+    expression = f'{price} {operation} {number}'
+    return bool(eval(expression))
 
 #ФОРМАТ: кому, сколько, операция, сумма операции , временное окно, кол-во операций, данные
 def pattern_rule(receiver, money, pat_oper, pat_quant, window,time_t, oper_quant, data_for_this_oper):
     if time_t == "minutes": td = timedelta(minutes=window)
     elif time_t == "hours": td = timedelta(hours=window)
     elif time_t == "days": td = timedelta(days=window)
-    window_start = (datetime.now()-td).strftime("%Y.%m.%d %H:%M:%S")
+    else: td = timedelta(minutes=window)
+    window_start = datetime.now() - td
     ed = 0
+
     for search in data_for_this_oper:
-        if window_start <=search[0] <= datetime.now().strftime("%Y.%m.%d %H:%M:%S") and search[2] == receiver\
-           and threshold_rule(str(search[3]), pat_oper, pat_quant):
-            ed+=1
-    if ed >= oper_quant: return True
-    else: return False
+        try:
+            ts = datetime.fromisoformat(search["timestamp"].replace("Z", "+00:00")) if isinstance(search["timestamp"], str) else search["timestamp"]
+            amount = float(search["amount"])
+            recv = str(search["receiver_account"])
+
+            if window_start <= ts <= datetime.now() and recv == str(receiver) and threshold_rule(amount, pat_oper, pat_quant):
+                ed += 1
+        except Exception as e:
+            print(f"[pattern_rule] Пропуск записи {search}: {e}")
+            continue
+
+    return ed >= oper_quant
 
 #ФОРМАТ: булевое выражение, денег заплачено, время операции    
 def composite_rule(bulev,amount,time):

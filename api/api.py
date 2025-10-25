@@ -18,7 +18,7 @@ import signal
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     
-# from methods.threerules import threshold_rule, pattern_rule, composite_rule
+from methods.threerules import threshold_rule, pattern_rule, composite_rule
 from notifications.notification import RedisHandler
 
 class CorrelationFilter(logging.Filter):
@@ -249,7 +249,11 @@ class FraudDetectionAPIHandler(BaseHTTPRequestHandler):
             elif self.path == '/notifications/create':
                 self._send_notification(data, correlation_id)
             elif self.path == '/threshold':
-                self._check_threshold_rule(data)
+                self._check_threshold_rule(data=data, correlation_id=correlation_id)
+            elif self.path == '/pattern':
+                self._check_pattern_rule(data=data, correlation_id=correlation_id)
+            elif self.path == '/composite':
+                self._check_composite_rule(data=data, correlation_id=correlation_id)
             else:
                 self._send_json_response(404, {"error": "Endpoint not found"}, correlation_id)
         except json.JSONDecodeError:
@@ -462,37 +466,89 @@ class FraudDetectionAPIHandler(BaseHTTPRequestHandler):
         tx_data = transactions[tx_id]
         self._send_json_response(200, {"transaction": tx_data}, correlation_id)
 
-    def _send_notification(self, data: Dict, correlation_id: str):
+    def _send_notification(self, data: dict, correlation_id: str):
         try:
+            # Проверяем обязательные поля
             required_fields = ['id', 'details', 'severity']
+            missing_fields = [field for field in required_fields if field not in data]
+            if missing_fields:
+                self._send_json_response(
+                    400,
+                    {"error": f"Missing fields: {', '.join(missing_fields)}"},
+                    correlation_id
+                )
+                return
+
+            # Приводим details к JSON-строке, если это словарь
+            details = data['details']
+            if isinstance(details, dict):
+                details = json.dumps(details, default=str)
+            elif not isinstance(details, str):
+                details = str(details)
+
+            # Отправка уведомления в Redis или другую систему
+            redis.send_alert(data['id'], details, data['severity'])
+
+            # Возвращаем успешный ответ
+            self._send_json_response(
+                200,
+                {"message": "Notification sent", "data": {**data, "details": details}},
+                correlation_id
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Notification failed: {str(e)}",
+                extra={'component': 'notifications', 'correlation_id': correlation_id}
+            )
+            self._send_json_response(
+                400,
+                {"error": str(e)},
+                correlation_id
+            )
+
+            
+        #ФОРМАТ ПРАВИЛА: сумма перевода, знак операции, число 
+    def _check_threshold_rule(self, data: Dict, correlation_id: str):
+        print("[DEBUG] payload received:", data)
+        print("[DEBUG] expression:", f'{data["amount"]} {data["operation"]} {data["number"]}')
+        try:
+            required_fields = ['id', 'amount', 'operation', "number"]
             for field in required_fields:
                 if field not in data:
-                    self._send_json_response(400, {"error": f"Missing field: {field}"}, correlation_id)
+                    self._send_json_response(400, {"error": f"Missing field: {field}"})
                     return
-            redis.send_alert(data['id'], data['details'], data['severity'])
-            self._send_json_response(200, {"message": "Notification sent", "data": data}, correlation_id)
+            bool = threshold_rule(data['amount'], data['operation'], data['number'])
+            self._send_json_response(200, {"message": "Threshold checking", "result": bool})
         except Exception as e:
-            logger.error(f"Notification failed: {str(e)}",
-                         extra={'component': 'notifications', 'correlation_id': correlation_id})
-            self._send_json_response(400, {"error": str(e)}, correlation_id)
-            
-    # def _check_threshold_rule(self, data: Dict):
-    #     print(data)
-    #     try:
-    #         required_fields = ['id', 'amount', 'operation', "number"]
-    #         for field in required_fields:
-    #             if field not in data:
-    #                 self._send_json_response(400, {"error": f"Missing field: {field}"})
-    #                 return
-            
-    #         amount = str(data['amount'])
-    #         operation = data['operation']
-    #         number = str(data['number'])
-            
-    #         bool = threshold_rule(amount, operation, number)
-    #         self._send_json_response(200, {"message": "Threshold checking", "result": bool})
-    #     except Exception as e:
-    #         self._send_json_response(400, {"error": str(e)})
+            self._send_json_response(400, {"error": str(e)})
+
+    #ФОРМАТ ПРАВИЛА: кому,сколько, операция, сумма операции , временное окно, тип времени(минута, часы, дни), кол-во операций, данные
+    def _check_pattern_rule(self, data: Dict, correlation_id: str):
+        try:
+            required_fields = ['id', 'receiver', 'amount', "pattern_operation","pattern_amount","time_window","time_type","operation_quantity","data"]
+            for field in required_fields:
+                if field not in data:
+                    self._send_json_response(400, {"error": f"Missing field: {field}"})
+                    return
+            bool = pattern_rule(data['receiver'], data['amount'], data["pattern_operation"],data["pattern_amount"],data["time_window"],data["time_type"],data["operation_quantity"],data["data"])
+            self._send_json_response(200, {"message": "Threshold checking", "result": bool})
+        except Exception as e:
+            self._send_json_response(400, {"error": str(e)})
+
+    #ФОРМАТ ПРАВИЛА: булевое выражение, денег заплачено, время операции    
+    def _check_composite_rule(self, data: Dict, correlation_id: str):
+        try:
+            required_fields = ['id', "boolev","amount","operation_time"]
+            for field in required_fields:
+                if field not in data:
+                    self._send_json_response(400, {"error": f"Missing field: {field}"})
+                    return
+            bool = composite_rule(data["boolev"],data["amount"],data["operation_time"])
+            self._send_json_response(200, {"message": "Threshold checking", "result": bool})
+        except Exception as e:
+            self._send_json_response(400, {"error": str(e)})
+
 
 def shutdown(signum, frame):
     logger.info("Shutting down...", extra={'component': 'shutdown', 'correlation_id': 'system'})

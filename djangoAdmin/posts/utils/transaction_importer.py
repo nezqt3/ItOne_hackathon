@@ -1,6 +1,8 @@
 from django.utils import timezone
 from django.db import models, transaction as db_transaction
-from datetime import datetime, timedelta
+import datetime
+from decimal import Decimal
+from datetime import timedelta
 from posts.models.models import Transactions, Rules
 from posts.models.transaction_queue import TransactionQueue
 from posts.utils.logging_utils import log_transaction_event
@@ -27,6 +29,8 @@ OPERATORS_MAP = {
     '==': operator.eq,
 }
 
+API_URL = "http://api:3000"
+
 # -----------------------
 # Логгеры и сериализация
 # -----------------------
@@ -38,7 +42,14 @@ def ensure_correlation_id(tx_obj=None, corr_id=None):
 def serialize_transaction(tx: dict) -> dict:
     serialized = {}
     for k, v in tx.items():
-        serialized[k] = v.isoformat() if isinstance(v, datetime) else v
+        if isinstance(v, (datetime.datetime, datetime.date)):
+            if timezone.is_naive(v):
+                v = timezone.make_aware(v)
+            serialized[k] = v.isoformat()
+        elif isinstance(v, Decimal):
+            serialized[k] = float(v)
+        else:
+            serialized[k] = v
     return serialized
 
 def log_safe(tx_id, corr_id, level, component, message, data=None):
@@ -71,93 +82,135 @@ def update_queue_status(transaction_id, status, correlation_id):
 # -----------------------
 # Отправка уведомлений
 # -----------------------
-def send_notification(transaction_id, tx, correlation_id, reason=None, queue_item=None):
+def send_notification(transaction_id, tx, correlation_id, triggered_rules=None):
     try:
-        log_safe(transaction_id, correlation_id, "INFO", "notification",
-                 f"📤 Отправка уведомления. Причина: {reason or 'обычная'}")
+        risk_level = "low"
+        if triggered_rules:
+            if len(triggered_rules) >= 3:
+                risk_level = "high"
+            elif len(triggered_rules) == 2:
+                risk_level = "medium"
 
-        tx_serialized = serialize_transaction(tx)
+        details = {
+            "transaction": serialize_transaction(tx),
+            "risk_level": risk_level,
+            "triggered_rules": [r.name for r in triggered_rules] if triggered_rules else [],
+            "notification_time": timezone.now().isoformat()
+        }
+
         payload = {
             "id": transaction_id,
-            "details": json.dumps(tx_serialized),
-            "severity": "0.9"
+            "details": json.dumps(details),
+            "severity": "0.9" if risk_level == "high" else ("0.6" if risk_level == "medium" else "0.3")
         }
-        if reason:
-            payload["reason"] = reason
 
-        response = requests.post("http://api:3000/notifications/create", json=payload, timeout=5)
+        log_safe(transaction_id, correlation_id, "INFO", "notification",
+                 f"📤 Отправка уведомления. Risk_level={risk_level}, triggered_rules={details['triggered_rules']}")
+
+        response = requests.post(f"{API_URL}/notifications/create", json=payload, timeout=5)
         response.raise_for_status()
 
         notifications_success.inc()
-        alerts_total.labels(severity="critical").inc()
+        alerts_total.labels(severity=risk_level).inc()
 
         log_safe(transaction_id, correlation_id, "INFO", "notification",
                  f"✅ Уведомление отправлено (status={response.status_code})")
-
-        if queue_item:
-            queue_item.status = "processed"
-            queue_item.save(update_fields=["status"])
-            log_queue_event(transaction_id, "processed", correlation_id, "Очередь: уведомление обработано")
 
     except Exception as e:
         notifications_failed.inc()
         alerts_failed.inc()
         log_safe(transaction_id, correlation_id, "ERROR", "notification", f"❌ Ошибка отправки уведомления: {e}")
-        if queue_item:
-            queue_item.status = "failed"
-            queue_item.save(update_fields=["status"])
         raise
+
 
 # -----------------------
 # Применение правил
 # -----------------------
 def apply_rules(tx_obj):
+    """
+    Проверяет активные правила через API FraudDetection
+    и возвращает список сработавших правил.
+    """
     triggered_rules = []
-    rules = Rules.objects.filter(is_active=True)
-    log_safe(tx_obj.transaction_id, tx_obj.correlation_id, "INFO", "rules",
-             f"🔍 Проверка правил. Активных правил: {rules.count()}")
+    active_rules = Rules.objects.filter(is_active=True)
 
-    for rule in rules:
+    if timezone.is_naive(tx_obj.timestamp):
+        tx_obj.timestamp = timezone.make_aware(tx_obj.timestamp)
+
+    log_safe(
+        tx_obj.transaction_id,
+        tx_obj.correlation_id,
+        "INFO",
+        "rules",
+        f"🔍 Запуск проверки правил. Активных: {active_rules.count()}"
+    )
+
+    for rule in active_rules:
         try:
-            log_safe(tx_obj.transaction_id, tx_obj.correlation_id, "DEBUG", "rules",
-                     f"→ Проверяется правило '{rule.name}' ({rule.rule_type})")
+            result = False
 
             if rule.rule_type == "threshold":
-                op_func = OPERATORS_MAP.get(rule.operator, operator.gt)
-                if op_func(float(tx_obj.amount), float(rule.threshold_value)):
-                    triggered_rules.append(rule)
+                payload = {
+                    "id": tx_obj.transaction_id,
+                    "amount": float(tx_obj.amount),
+                    "operation": rule.operator,
+                    "number": float(rule.threshold_value or 0),
+                }
+                r = requests.post(f"{API_URL}/threshold", json=payload, timeout=5)
+                result = r.json().get("result", False)
 
             elif rule.rule_type == "pattern":
                 window_start = tx_obj.timestamp - timedelta(minutes=rule.pattern_window_minutes or 0)
-                recent_tx = Transactions.objects.filter(
+                recent_tx_qs = Transactions.objects.filter(
                     sender_account=tx_obj.sender_account,
                     timestamp__gte=window_start
-                )
-                count = recent_tx.count()
-                total = recent_tx.aggregate(total=models.Sum("amount"))["total"] or 0
-                if count >= (rule.pattern_max_count or 0) or total > (rule.pattern_max_amount or 0):
-                    triggered_rules.append(rule)
+                ).values()
+
+                recent_tx = [serialize_transaction(tx) for tx in recent_tx_qs]
+
+                payload = {
+                    "id": tx_obj.transaction_id,
+                    "receiver": tx_obj.receiver_account,
+                    "amount": float(tx_obj.amount),
+                    "pattern_operation": rule.operator,
+                    "pattern_amount": float(rule.pattern_max_amount or 0),
+                    "time_window": rule.pattern_window_minutes or 0,
+                    "time_type": "minute",
+                    "operation_quantity": rule.pattern_max_count or 0,
+                    "data": recent_tx,
+                }
+                r = requests.post(f"{API_URL}/pattern", json=payload, timeout=5)
+                result = r.json().get("result", False)
 
             elif rule.rule_type == "composite":
-                match_all = True
-                for cond in rule.composite_conditions or []:
-                    if cond["type"] == "threshold":
-                        op = OPERATORS_MAP.get(cond.get("operator", ">"), operator.gt)
-                        if not op(tx_obj.amount, cond.get("value", 0)):
-                            match_all = False
-                    elif cond["type"] == "time_range":
-                        hour = tx_obj.timestamp.hour
-                        if not (cond.get("start", 0) <= hour <= cond.get("end", 23)):
-                            match_all = False
-                if match_all:
-                    triggered_rules.append(rule)
+                payload = {
+                    "id": tx_obj.transaction_id,
+                    "boolev": rule.composite_conditions,
+                    "amount": float(tx_obj.amount),
+                    "operation_time": tx_obj.timestamp.isoformat(),
+                }
+                r = requests.post(f"{API_URL}/composite", json=payload, timeout=5)
+                result = r.json().get("result", False)
+
+            if result:
+                triggered_rules.append(rule)
+                log_safe(
+                    tx_obj.transaction_id,
+                    tx_obj.correlation_id,
+                    "INFO",
+                    "rules",
+                    f"⚡ Сработало правило '{rule.name}' ({rule.rule_type})"
+                )
 
         except Exception as e:
-            log_safe(tx_obj.transaction_id, tx_obj.correlation_id, "ERROR", "rules",
-                     f"Ошибка при проверке правила {rule.name}: {e}")
+            log_safe(
+                tx_obj.transaction_id,
+                tx_obj.correlation_id,
+                "ERROR",
+                "rules",
+                f"Ошибка при применении правила '{rule.name}': {e}"
+            )
 
-    log_safe(tx_obj.transaction_id, tx_obj.correlation_id, "INFO", "rules",
-             f"Проверка завершена. Сработало {len(triggered_rules)}: {[r.name for r in triggered_rules]}")
     return triggered_rules
 
 # -----------------------
@@ -185,8 +238,8 @@ def import_transactions(data: list, source: str = "api_or_admin", task_id: str =
         try:
             timestamp = tx.get("timestamp")
             if isinstance(timestamp, str):
-                timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            if timestamp.tzinfo is None:
+                timestamp = datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            if timezone.is_naive(timestamp):
                 timestamp = timezone.make_aware(timestamp)
 
             defaults = {
@@ -212,8 +265,7 @@ def import_transactions(data: list, source: str = "api_or_admin", task_id: str =
                     obj.is_fraud = True
                     obj.fraud_type = ", ".join([r.name for r in triggered])
                     obj.save(update_fields=["is_fraud", "fraud_type"])
-                    reason = f"⚠️ Сработали правила: {obj.fraud_type}"
-                    send_notification(transaction_id, tx, correlation_id, reason=reason)
+                    send_notification(transaction_id, tx, correlation_id, triggered_rules=triggered)
 
                 obj.processing_time_ms = (time.time() - start_time) * 1000
                 obj.save(update_fields=["processing_time_ms"])
