@@ -1,11 +1,13 @@
 <h1>Хакатон от МГУ</h1>
 
 <h2>Команды для запуска контейнеризации</h2>
-``` docker-compose build
-docker-compose up -d
-docker-compose exec web python djangoAdmin/manage.py migrate
-docker-compose exec web python djangoAdmin/manage.py createsuperuser
-docker-compose exec web python djangoAdmin/manage.py makemigrations ```
+<pre>
+  docker-compose build
+  docker-compose up -d
+  docker-compose exec web python djangoAdmin/manage.py migrate
+  docker-compose exec web python djangoAdmin/manage.py createsuperuser
+  docker-compose exec web python djangoAdmin/manage.py makemigrations
+</pre>
 
 <h2>Стек технологий</h2>
 <ul>
