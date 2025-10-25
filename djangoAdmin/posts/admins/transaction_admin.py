@@ -48,20 +48,34 @@ class TransactionsAdmin(admin.ModelAdmin):
     actions = ["view_logs_for_transaction"]
     
     def export_csv_view(self, request):
-        """Вызываем API для экспорта CSV и отдаем пользователю"""
-        api_url = "http://api:3000/transactions/export-csv"
-        try:
-            r = requests.get(api_url, timeout=10)
-            r.raise_for_status()
-            response = redirect(api_url)
-            return r.content and HttpResponse(
-                r.content,
-                content_type='text/csv',
-                headers={'Content-Disposition': f'attachment; filename="transactions.csv"'}
-            )
-        except Exception as e:
-            self.message_user(request, f"Ошибка при экспорте CSV: {e}", level="error")
-            return redirect("..")
+        """Экспорт всех транзакций в CSV и отдача пользователю"""
+        # Создаём HttpResponse с нужным MIME-типом
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="transactions.csv"'
+
+        writer = csv.writer(response)
+        # Заголовки столбцов
+        writer.writerow([
+            'transaction_id', 'timestamp', 'sender_account', 'receiver_account',
+            'amount', 'transaction_type', 'status', 'correlation_id', 'merchant_category', 'location'
+        ])
+
+        # Берём все транзакции из базы
+        for tx in Transactions.objects.all().order_by('timestamp'):
+            writer.writerow([
+                tx.transaction_id,
+                tx.timestamp.isoformat() if tx.timestamp else '',
+                tx.sender_account,
+                tx.receiver_account,
+                tx.amount,
+                tx.transaction_type,
+                tx.status,
+                tx.correlation_id,
+                getattr(tx, 'merchant_category', ''),
+                getattr(tx, 'location', '')
+            ])
+
+        return response
 
     def view_logs_for_transaction(self, request, queryset):
         """Позволяет в админке быстро посмотреть логи по correlation_id"""
