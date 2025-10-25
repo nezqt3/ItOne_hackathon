@@ -24,5 +24,8 @@
 
 <h2>REST endpoints</h2>
 <ul>
-  <li></li>
+  <li>/notifications/create</li>
+  <li>/threshold</li>
+  <li>/pattern</li>
+  <li>/composite</li>
 </ul>
